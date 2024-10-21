@@ -1,0 +1,17 @@
+private_key: |
+  ${SERVICE_ACCOUNT_PRIVATE_KEY}
+
+token_header:
+  kid: ${SERVICE_ACCOUNT_KEY_ID}
+
+token_payload:
+  iss: ${SERVICE_ACCOUNT_EMAIL}
+  sub: ${SERVICE_ACCOUNT_EMAIL}
+  aud: https://oauth2.googleapis.com/token
+
+oauth_request:
+  grant_type: urn:ietf:params:oauth:grant-type:jwt-bearer
+  assertion: $${{JWT}}
+
+oauth_token_url: https://oauth2.googleapis.com/token
+oauth_response_field: id_token

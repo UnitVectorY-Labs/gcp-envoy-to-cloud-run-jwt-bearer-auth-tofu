@@ -1,0 +1,117 @@
+static_resources:
+  listeners:
+  - name: listener_0
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8080
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http_8080
+          route_config:
+            name: local_route_8080
+            virtual_hosts:
+            - name: main_virtual_host
+              domains:
+              - "*"  # Matches all domains
+              routes:
+              - match:
+                  prefix: "/backend"
+                route:
+                  cluster: envoy_8081  # Route to internal listener on port 8081
+                  prefix_rewrite: "/"  # Rewrite path, removing '/backend'
+          http_filters:
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+  
+  # Internal Listener on Port 8081 for handling /backend traffic
+  - name: listener_1
+    address:
+      socket_address:
+        address: 127.0.0.1  # Bind to localhost for internal traffic
+        port_value: 8081
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http_8081
+          route_config:
+            name: local_route_8081
+            virtual_hosts:
+            - name: internal_virtual_host
+              domains:
+              - "*"  # Matches all domains
+              routes:
+              - match:
+                  prefix: "/"  # Match all paths (after /backend has been rewritten)
+                route:
+                  cluster: my_cluster  # Route to backend cluster
+                  host_rewrite_literal: ${BACKEND_DOMAIN}  # Rewrite the host header
+                metadata:
+                  filter_metadata:
+                    com.unitvectory.authzjwtbearerinjector.tokenpayload:
+                      target_audience: https://${BACKEND_DOMAIN} # Specify the target audience
+          http_filters:
+          - name: envoy.ext_authz
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+              transport_api_version: V3
+              failure_mode_allow: false
+              allowed_headers:
+                patterns:
+                  - exact: ''
+              route_metadata_context_namespaces:
+                - com.unitvectory.authzjwtbearerinjector.tokenpayload
+              grpc_service:
+                google_grpc:
+                  target_uri: "127.0.0.1:50051"
+                  stat_prefix: ext_authz
+                timeout: 5s
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+  # Cluster for internal routing from main listener to internal listener on port 8081
+  - name: envoy_8081
+    connect_timeout: 0.25s
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: envoy_8081
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1  # Internal routing
+                port_value: 8081
+  
+  # Backend cluster
+  - name: my_cluster
+    connect_timeout: 10s
+    type: LOGICAL_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: my_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: ${BACKEND_DOMAIN}  # Specify the backend domain
+                port_value: 443
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni:  ${BACKEND_DOMAIN}  # Specify the SNI
+        common_tls_context:
+          tls_params:
+            tls_minimum_protocol_version: TLSv1_2
+            tls_maximum_protocol_version: TLSv1_3
