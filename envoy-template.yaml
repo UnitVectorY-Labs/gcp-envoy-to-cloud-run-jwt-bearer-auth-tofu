@@ -1,6 +1,6 @@
 static_resources:
   listeners:
-  - name: listener_0
+  - name: public_listener
     address:
       socket_address:
         address: 0.0.0.0
@@ -21,7 +21,7 @@ static_resources:
               - match:
                   prefix: "/backend"
                 route:
-                  cluster: envoy_8081  # Route to internal listener on port 8081
+                  cluster: local_backend  # Route to internal listener on port 8081
                   prefix_rewrite: "/"  # Rewrite path, removing '/backend'
           http_filters:
           - name: envoy.filters.http.router
@@ -29,7 +29,7 @@ static_resources:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   
   # Internal Listener on Port 8081 for handling /backend traffic
-  - name: listener_1
+  - name: backend_listener
     address:
       socket_address:
         address: 127.0.0.1  # Bind to localhost for internal traffic
@@ -50,7 +50,7 @@ static_resources:
               - match:
                   prefix: "/"  # Match all paths (after /backend has been rewritten)
                 route:
-                  cluster: my_cluster  # Route to backend cluster
+                  cluster: remote_backend  # Route to backend cluster
                   host_rewrite_literal: ${BACKEND_DOMAIN}  # Rewrite the host header
                 metadata:
                   filter_metadata:
@@ -78,12 +78,12 @@ static_resources:
 
   clusters:
   # Cluster for internal routing from main listener to internal listener on port 8081
-  - name: envoy_8081
+  - name: local_backend
     connect_timeout: 0.25s
     type: STATIC
     lb_policy: ROUND_ROBIN
     load_assignment:
-      cluster_name: envoy_8081
+      cluster_name: local_backend
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -93,12 +93,12 @@ static_resources:
                 port_value: 8081
   
   # Backend cluster
-  - name: my_cluster
+  - name: remote_backend
     connect_timeout: 10s
     type: LOGICAL_DNS
     lb_policy: ROUND_ROBIN
     load_assignment:
-      cluster_name: my_cluster
+      cluster_name: remote_backend
       endpoints:
       - lb_endpoints:
         - endpoint:
