@@ -9,3 +9,6 @@ This sample project demonstrates how to configure [EnvoyProxy](https://www.envoy
 The primary goal is to showcase how EnvoyProxy can authenticate to a backend service using a private key, rather than directly using the service account of the Cloud Run service (the best practice for GCP environments). For the best-practice approach, refer to [gcp-envoy-to-cloud-run-metadata-auth-tofu](https://github.com/UnitVectorY-Labs/gcp-envoy-to-cloud-run-metadata-auth-tofu), which utilizes the Cloud Run service account without authzjwtbearerinjector.
 
 This project uses a private key directly to demonstrate how authzjwtbearerinjector can be applied in scenarios where non-GCP services need to be accessed, or where GCP resources are accessed using a service account outside of GCP.
+
+<!-- BEGIN_TF_DOCS -->
+<!-- END_TF_DOCS -->
